@@ -1,0 +1,76 @@
+---
+title: "Project 2 - Pew Income and Religion Data"
+author: "C. Rosemond 100619"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Data Description
+I created a small data set using Pew Research Trust 2014 survey data describing the relationship between income and religion in the United States. The data show the proportions of sampled individuals from each religious tradition that fall into selected income bands: < $30K, $30K - $49,999, $50K - $99,999, and > $100K.
+
+Data source: Pew Research Trust. (2014). "Income distribution by religious group". Accessed from https://www.pewforum.org/religious-landscape-study/income-distribution/
+
+<br>
+
+### Loading the data
+I start by reading in the data and checking its structure.
+
+```{r load, eval=TRUE, warning=FALSE, message=FALSE}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r pew1, eval=TRUE}
+religion <- read.csv('https://raw.githubusercontent.com/chrosemo/data607_fall19_project2/master/pew.csv', header=TRUE)
+religion
+str(religion)
+```
+
+<br>
+
+### Tidying the data
+After renaming all of the columns and converting some of them, I gather the income-specific ones and their data into an 'Income Range' column containing the income bands and a 'Proportion' column containing the values. I then create a new column with estimated counts of sampled individuals.
+
+```{r pew2, eval=TRUE, warning=FALSE, message=FALSE}
+religion <- religion %>% rename('< $30,000' = 'Less.than..30.000', '$30,000 - $49,999' = 'X.30.000..49.999', '$50,000 - $99,999' = 'X.50.000..99.999', '> $100,000' = 'X.100.000.or.more') 
+religion$Religious.tradition <- as.character(religion$Religious.tradition)
+religion$Sample.Size <- as.double(gsub(',', '', religion$Sample.Size))
+religion <- gather(religion, Income.range, Proportion, -Religious.tradition, -Sample.Size)
+religion$Income.range <- factor(religion$Income.range, ordered=TRUE, levels=c('> $100,000','$50,000 - $99,999', '$30,000 - $49,999','< $30,000'))
+religion$Proportion <- as.numeric(gsub('%', '', religion$'Proportion'))/100
+head(religion)
+```
+
+<br>
+
+### Exploring the data
+With no specific analysis noted, I embark on an exploratory data analysis. I start by checking the mean proportion falling in each income band. Averaging across all religions, approximately 31.8 percent falls below 30,000 dollars, approximately 19 percent falls between 30,000 and 49,999, approximately 27.9 percent falls between 50,000 and 99,999, and approximately 20.9 percent falls above 100,000.
+
+Considering specific religions, Historically Black Protestant (0.53), Jehovah's Witness (0.48), and Buddhist (0.36) and Catholic (0.36) have the highest proportions falling below 30,000 dollars, while Jewish (0.16), Hindu (0.17), and Orthodox Christian (0.18) have the lowest proportions. Regarding the 100,000 dollar and above band, Jewish (0.46), Hindu (0.36), and Orthodox Christian (0.29) have the highest proportions, and Jehovah's Witness (0.04), Historically Black Protestant (0.08), and Buddhist (0.13) have the lowest proportions.
+
+```{r pew3, eval=TRUE}
+tapply(religion$Proportion, religion$Income.range, mean)
+religion %>% arrange(Proportion) %>% group_by(Income.range) %>% top_n(3, Proportion)
+religion %>% arrange(Proportion) %>% group_by(Income.range) %>% top_n(-3, Proportion)
+```
+
+<br>
+
+I finish by visualizing the data as a horizontal stacked bar chart. Again, there are clear differences in income across religious traditions, though there are clearly also omitted variables (race/ethnicity, education, etc.) that correlate with income and/or religion.
+
+```{r pew4, eval=TRUE}
+ggplot(data = religion) +
+  geom_bar(
+    mapping = aes(x=Religious.tradition, y=Proportion, fill=Income.range),
+    position = 'fill',
+    stat = 'identity'
+  ) +
+  geom_text(aes(x=Religious.tradition, y=Proportion, label=Proportion),
+    position = position_stack(vjust=0.5)) +
+  coord_flip()
+```
+

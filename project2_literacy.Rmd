@@ -1,0 +1,101 @@
+---
+title: "Project 2 - UN Adult Literacy Data"
+author: "C. Rosemond 100619"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Data Description
+I am broadly interested in poverty alleviation and thus selected a UNICEF data set that contains adult literacy data by country. Literacy rate is defined as the percentage of the population aged 15 years and over who can both read and write with understand a short simple statement on his/her everyday life. In general, highly developed countries do not have rate values in this data set since they are assumed to have completely literate populations; these countries' rates are indicated by "-".
+
+Data source: Data and Analytics Section; Division of Data, Research and Policy, UNICEF. (2015). "Youth and adult literacy rates". Accessed from https://data.unicef.org/wp-content/uploads/2016/05/education_table-youth-and-adult-literacy-rate-updated-oct.-2015.xlsx
+
+<br>
+
+### Loading the data
+I start by reading in the data and checking its structure.
+
+```{r load, eval=TRUE, warning=FALSE, message=FALSE}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r nih1, eval=TRUE}
+literacy <- read.csv("https://raw.githubusercontent.com/chrosemo/data607_fall19_project2/master/literacy.csv", skip=9)
+head(literacy)
+str(literacy)
+```
+
+<br>
+
+### Tidying the data
+I select the country-specific rows, filter out the countries with effectively complete literacy (no data), remove irrelevant columns, and rename the sex-specific columns. Noting that the 'Male' and 'Female' columns are factors with different numbers of levels, I convert both columns and the 'Total' column to character format prior to gathering the data into long format. I then convert the 'Total' and gathered 'Rate' columns to numeric format.
+
+```{r nih2, eval=TRUE}
+literacy <- literacy %>% slice(2:198) %>% filter(Total != '-') %>% select(-c(1,5,7,9,10)) %>% rename('Male' = 'Sex', 'Female' = 'X.2')
+literacy$Total <- as.character(literacy$Total)
+literacy$Male <- as.character(literacy$Male)
+literacy$Female <- as.character(literacy$Female)
+literacy <- gather(literacy, Sex, Rate, -1, -2, -3)
+literacy$Total <- as.numeric(literacy$Total)/100
+literacy$Rate <- as.numeric(literacy$Rate)/100
+head(literacy)
+```
+
+<br>
+
+### Exploring the data
+No specific analysis is noted, so I embark on an exploratory data analysis. I start by checking the distribution of total adult literacy rates by country. The rates range from 0.150 to 1.000, with an IQR of 0.270, a median of 0.900, and a mean of 0.813. The distribution itself is heavily skewed left.
+
+```{r nih3, eval=TRUE}
+summary(literacy$Total)
+ggplot(data=literacy, mapping=aes(x=Total)) +
+  geom_histogram(color="black", fill="white", bins=50) +
+  geom_vline(data=literacy, aes(xintercept=mean(Total)), linetype="dashed")
+```
+
+<br>
+
+The sex-specific distributions of literacy rates are similar in shape (heavily left skewed) to the distribution of total rates. The median (0.925) and mean (0.852) for males exceed the same (0.895 and 0.775, respectively) for females. By contrast, the range (0.910) and IQR (0.340) for females are both wider than their male-specific counterparts (0.770 and 0.200, respectively). 
+
+```{r nih4, eval=TRUE}
+tapply(literacy$Rate, literacy$Sex, summary)
+ggplot(data = literacy, mapping=aes(x=Sex, y=Rate)) +
+  geom_boxplot(outlier.color="red") +
+  coord_flip()
+```
+
+<br>
+
+Next, I look at the countries with the highest and lowest literacy rates, total and by sex. Total, 18 countries have 100% literacy; for females, 16 countries; for males, 21 countries. 
+
+```{r nih5, eval=TRUE}
+literacy %>% top_n(10, Total)
+literacy %>% top_n(-10, Total)
+```
+
+<br>
+
+The ten countries with the lowest literacy rates, total and by sex, are generally located in Africa and have rates less than 0.30.
+
+```{r nih6, eval=TRUE}
+literacy %>% arrange(Sex, Rate) %>% group_by(Sex) %>% top_n(-10, Rate)
+```
+
+<br>
+
+I finish my analysis by testing the differences in literacy rate by sex. The distribution of differences between sexes skews right and does not appear normally distributed. After an [admittedly] quick check of whether the data meet the test assumptions, I apply a two-tailed paired Wilcoxon signed rank test given the shape of the rate distributions and within-country paired rates. The test returns a significant p-value, meaning that if the test assumptions are met, male literacy rates are different (greater) than female literacy rates.
+
+```{r nih7, eval=TRUE}
+male_literacy <- literacy$Rate[literacy$Sex == "Male"]
+female_literacy <- literacy$Rate[literacy$Sex == "Female"]
+diff_literacy <- male_literacy - female_literacy
+hist(diff_literacy)
+qqnorm(diff_literacy)
+wilcox.test(male_literacy, female_literacy, alternative="two.sided", paired=TRUE)
+```
+

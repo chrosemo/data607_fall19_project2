@@ -1,0 +1,116 @@
+---
+title: "Project 2 - UN Migrant Data"
+author: "C. Rosemond 100619"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Data Summary
+
+Immigration is a hot-button issue in the U.S., particularly recently, so I wanted to use United Nations data to learn more about global trends. This data set contains counts of migrants by country/region of origin and country/region of destination as of 2015.
+
+Data source:United Nations, Department of Economic and Social Affairs, Population Division (2015). "Trends in International Migrant Stock: Migrants by Destination and Origin (United Nations database, POP/DB/MIG/Stock/Rev.2015). Accessed    https://www.un.org/en/development/desa/population/migration/data/estimates2/data/UN_MigrantStockByOriginAndDestination_2015.xlsx
+
+<br>
+
+### Loading the data
+I start by reading in the data and checking its structure.
+
+```{r load, eval=TRUE, warning=FALSE, message=FALSE}
+library(tidyr)
+library(dplyr)
+library(readr)
+library(ggplot2)
+```
+
+```{r migrant1, eval=TRUE, warning=FALSE, message=FALSE}
+migrant <- read_csv("https://raw.githubusercontent.com/chrosemo/data607_fall19_project2/master/migrant.csv", skip=14, col_names = TRUE, col_types = cols (.default='c'))
+head(migrant)
+```
+
+<br>
+
+### Tidying the data
+The CSV file has column names split across two rows, so I update the data frame's first row and make its values the column names. After deleting the now redundant first row, I remove the blank spaces from the columns containing counts and then convert those columns to numeric format.
+
+```{r migrant2, eval=TRUE}
+migrant[1, 1:5] = c('Sort.order','Destination', 'Notes', 'Code', 'Data.type')
+colnames(migrant) <- as.character(migrant[1,])
+migrant <- migrant[-1,]
+migrant[6:240] <- lapply(migrant[6:240], function(y) as.numeric(gsub('\\s{1,2}', '', y)))
+head(migrant)
+```
+
+<br>
+
+Next, I drop all rows that represent global or regional geographies (rows with missing values for "Data.type"); remove columns not necessary for my analysis; reshape to long format; filter out resulting rows where destination and origin are the same, i.e. irrelevant information; and arrange by destination. I finish by converting the origin count column to numeric format to facilitate analysis.
+
+```{r migrant3, eval=TRUE}
+migrant <- migrant %>% drop_na(Data.type) %>% select(-c(1,3,4,5)) %>% gather(Origin, Origin.count, -Destination) %>% filter(Destination != Origin) %>% arrange(Destination)
+migrant$Origin.count <- as.numeric(migrant$Origin.count)
+head(migrant)
+```
+
+<br>
+
+### Analyzing the data
+One of my classmates provided a set of general questions for analysis, though not all apply directly to this 2015 gender-neutral data set. The questions are the following:
+
+#### Which country/geography has had the most emigrants as of 2015? the fewest emigrants?
+#### Which country/geography has had the most immigrants as of 2015? The fewest immigrants? The median number?
+#### Which country/geography has sent the most emigrants to the United States as of 2015? The fewest emigrants?
+
+<br>
+
+#### Which country/geography has had the most emigrants as of 2015? The fewest emigrants?
+
+Worldwide, as of 2015, an estimated 243,700,236 individuals migrated from one UN-recognized geography to another. Among countries of origin, India has had the most total emigrants, with an estimated 15,575,724, followed by Mexico (an estimated 12,339,062) and the Russian Federation (an estimated 10,576,766).
+
+Regarding countries with the fewest emigrants, the Holy See, with an estimated 182 emigrants, has had the fewest, followed by Saint Pierre and Miquelon (an estimated 435) and the Falkland Islands (Malvinas) (an estimated 1,124).
+
+```{r migrant4, eval=TRUE}
+Total_by_origin <- migrant %>% group_by(Origin) %>% summarise(Origin.total = sum(Origin.count, na.rm=TRUE)) %>% arrange(-Origin.total)
+head(Total_by_origin)
+tail(Total_by_origin)
+```
+
+<br>
+
+#### Which country/geography has had the most immigrants as of 2015? The fewest immigrants? The median number?
+
+Globally, the United States has had the most immigrants as of 2015, with an estimated total of 46,627,102, followed by Germany (an estimated 12,005,690), and the Russian Federation (an estimated 11,643,276). The geographies with the fewest immigrants as of 2015 are Tuvalu (an estimated 141), Tokelau (an estimated 487), and Niue (an estimated 557).
+
+```{r migrant5, eval=TRUE}
+migrant_totals <- migrant %>% filter(Origin == 'Total') %>% arrange(-Origin.count)
+head(migrant_totals)
+tail(migrant_totals)
+```
+
+<br>
+
+The median number of immigrants across all countries/geographies is an estimated 149,726, with a 25th percentile of an estimated 28,080 and a 75th percentile of an estimated 704,272. A quick histogram shows that the distribution of immigrants by country is extremely right skewed, much like the distribution of total population by country.
+
+```{r migrant6, eval=TRUE}
+summary(migrant_totals$Origin.count)
+ggplot(data=migrant_totals, mapping=aes(x=Origin.count)) +
+  geom_histogram(color="black", fill="white", bins=50) +
+  geom_vline(data=migrant_totals, aes(xintercept=mean(Origin.count)), linetype="dashed")
+```
+
+<br>
+
+#### Which country/geography has sent the most emigrants to the United States as of 2015? The fewest emigrants?
+
+Excluding regional geographies, Mexico (an estimated 12,050,031), China (an estimated 2,103,551), and India (an estimated 1,969,286) have sent the most emigrants to the United States as of 2015. By contrast, Turkmenistan has sent the fewest, with an estimated 2,079. 81 countries/geographies have missing data in this data set.
+
+```{r migrant7, eval=TRUE}
+USA_emigrants <- migrant %>% filter(Destination == 'United States of America') %>% arrange(-Origin.count)
+head(USA_emigrants)
+tail(USA_emigrants)
+summary(USA_emigrants$Origin.count)
+head(USA_emigrants[USA_emigrants$Origin.count == 2079,],1)
+```
+
